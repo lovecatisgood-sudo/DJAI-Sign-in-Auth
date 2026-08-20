@@ -1,0 +1,59 @@
+{
+  "name": "@djai/sign-in",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "description": "Central OpenID Connect identity provider for Sign in with DJAI School",
+  "engines": {
+    "node": ">=22.0.0"
+  },
+  "scripts": {
+    "dev": "tsx watch src/main.ts",
+    "build": "tsc -p tsconfig.build.json",
+    "start": "node dist/main.js",
+    "typecheck": "tsc --noEmit",
+    "lint": "eslint .",
+    "test": "vitest run",
+    "test:db": "vitest run test/postgres.integration.test.ts",
+    "test:watch": "vitest",
+    "db:migrate": "tsx scripts/migrate.ts",
+    "client:register": "tsx scripts/register-client.ts",
+    "client:rotate-secret": "tsx scripts/rotate-client-secret.ts",
+    "client:revoke": "tsx scripts/revoke-client.ts",
+    "db:cleanup": "tsx scripts/cleanup.ts",
+    "keys:generate": "tsx scripts/generate-signing-key.ts",
+    "verify:discovery": "tsx scripts/verify-discovery.ts",
+    "verify": "npm run typecheck && npm run lint && npm test && npm run build"
+  },
+  "dependencies": {
+    "@supabase/supabase-js": "2.112.3",
+    "express": "5.2.1",
+    "express-rate-limit": "8.6.2",
+    "helmet": "8.1.0",
+    "jose": "6.2.8",
+    "oidc-provider": "9.11.3",
+    "pg": "8.23.0",
+    "pino": "10.3.1",
+    "pino-http": "11.0.0",
+    "zod": "4.4.3"
+  },
+  "devDependencies": {
+    "@eslint/js": "9.39.2",
+    "@types/express": "5.0.6",
+    "@types/node": "24.10.1",
+    "@types/oidc-provider": "9.11.1",
+    "@types/pg": "8.15.6",
+    "@types/supertest": "6.0.3",
+    "eslint": "9.39.2",
+    "globals": "16.5.0",
+    "openid-client": "6.8.7",
+    "supertest": "7.1.4",
+    "tsx": "4.21.0",
+    "typescript": "5.9.3",
+    "typescript-eslint": "8.48.1",
+    "vitest": "4.1.11"
+  },
+  "overrides": {
+    "esbuild": "0.28.2"
+  }
+}
