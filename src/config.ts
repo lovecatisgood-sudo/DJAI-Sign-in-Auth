@@ -15,6 +15,7 @@ const schema = z.object({
   OIDC_ISSUER: z.url().default('http://localhost:3000'),
   DATABASE_URL: z.string().min(1),
   DATABASE_SSL: z.enum(['disable', 'require']).default('require'),
+  DATABASE_CA_CERT: z.string().min(1).optional().transform((value) => value?.replaceAll('\\n', '\n')),
   SUPABASE_URL: z.url(),
   SUPABASE_PUBLISHABLE_KEY: z.string().min(20),
   SUPABASE_SECRET_KEY: z.string().min(20),
@@ -41,7 +42,8 @@ const schema = z.object({
   SESSION_TTL_SECONDS: z.coerce.number().int().min(300).max(86_400).default(3600),
 })
 
-export type AppConfig = Omit<z.infer<typeof schema>, 'OIDC_JWKS'> & {
+export type AppConfig = Omit<z.infer<typeof schema>, 'OIDC_JWKS' | 'DATABASE_CA_CERT'> & {
+  DATABASE_CA_CERT?: string
   OIDC_JWKS: { keys: Record<string, unknown>[] }
 }
 
@@ -63,6 +65,9 @@ export function loadConfig(environment: NodeJS.ProcessEnv = process.env): AppCon
     }
     if (!parsed.OIDC_ISSUER.startsWith('https://')) {
       issues.push('production issuer must use HTTPS')
+    }
+    if (parsed.DATABASE_SSL === 'require' && !parsed.DATABASE_CA_CERT) {
+      issues.push('DATABASE_CA_CERT is required for verified production database TLS')
     }
   }
 

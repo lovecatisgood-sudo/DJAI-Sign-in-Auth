@@ -5,13 +5,15 @@ const { Pool } = pg
 
 export type Database = pg.Pool
 
-export function createDatabase(config: Pick<AppConfig, 'DATABASE_URL' | 'DATABASE_SSL'>): Database {
+export function createDatabase(config: Pick<AppConfig, 'DATABASE_URL' | 'DATABASE_SSL' | 'DATABASE_CA_CERT'>): Database {
   return new Pool({
     connectionString: config.DATABASE_URL,
     max: 10,
     idleTimeoutMillis: 30_000,
     connectionTimeoutMillis: 5_000,
-    ssl: config.DATABASE_SSL === 'require' ? { rejectUnauthorized: true } : false,
+    ssl: config.DATABASE_SSL === 'require'
+      ? { ca: config.DATABASE_CA_CERT, rejectUnauthorized: true }
+      : false,
     application_name: 'djai-sign-in',
   })
 }
