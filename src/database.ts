@@ -1,5 +1,5 @@
 import { readFileSync } from 'node:fs'
-import { resolve } from 'node:path'
+import { fileURLToPath } from 'node:url'
 import pg from 'pg'
 import type { AppConfig } from './config.js'
 
@@ -9,7 +9,7 @@ export type Database = pg.Pool
 
 export function createDatabase(config: Pick<AppConfig, 'DATABASE_URL' | 'DATABASE_SSL' | 'DATABASE_CA_CERT'>): Database {
   const certificate = config.DATABASE_SSL === 'require'
-    ? config.DATABASE_CA_CERT ?? readFileSync(resolve(process.cwd(), 'certs/supabase-root-2021-ca.crt'), 'utf8')
+    ? config.DATABASE_CA_CERT ?? readFileSync(fileURLToPath(new URL('../certs/supabase-root-2021-ca.crt', import.meta.url)), 'utf8')
     : undefined
 
   return new Pool({
