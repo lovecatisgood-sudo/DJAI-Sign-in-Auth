@@ -60,27 +60,60 @@ function containsPrivateSigningKey(value: unknown): boolean {
   return Array.isArray(keys) && keys.some((key) => typeof key === 'object' && key !== null && 'd' in key)
 }
 
-function decryptBundledJwks(encryptionKey: string): string {
-  const masterKey = Buffer.from(encryptionKey, 'base64')
-  if (masterKey.length !== 32) throw new Error('invalid bundle encryption key')
-  const derivedKey = Buffer.from(hkdfSync(
-    'sha256',
-    masterKey,
-    Buffer.from('djai-sign-in'),
-    Buffer.from('oidc-jwks-bundle-v1'),
-    32,
-  ))
+type JwksEnvelopeSource = 'auth-transaction' | 'client-secrets' | 'cookie' | 'database' | 'supabase'
+
+interface JwksEnvelope {
+  ciphertext: string
+  iv: string
+  source: JwksEnvelopeSource
+  tag: string
+}
+
+function envelopeSources(environment: NodeJS.ProcessEnv): Partial<Record<JwksEnvelopeSource, Buffer>> {
+  const cookie = environment.OIDC_COOKIE_KEYS?.split(',')[0]?.trim()
+  return {
+    ...(environment.AUTH_TRANSACTION_KEY
+      ? { 'auth-transaction': Buffer.from(environment.AUTH_TRANSACTION_KEY, 'base64') }
+      : {}),
+    ...(environment.CLIENT_SECRET_ENCRYPTION_KEY
+      ? { 'client-secrets': Buffer.from(environment.CLIENT_SECRET_ENCRYPTION_KEY, 'base64') }
+      : {}),
+    ...(cookie ? { cookie: Buffer.from(cookie) } : {}),
+    ...(environment.DATABASE_URL ? { database: Buffer.from(environment.DATABASE_URL) } : {}),
+    ...(environment.SUPABASE_SECRET_KEY ? { supabase: Buffer.from(environment.SUPABASE_SECRET_KEY) } : {}),
+  }
+}
+
+function decryptBundledJwks(environment: NodeJS.ProcessEnv): string {
   const bundle = JSON.parse(readFileSync(
     new URL('../secrets/oidc-jwks.enc.json', import.meta.url),
     'utf8',
-  )) as { ciphertext: string; iv: string; tag: string; version: number }
-  if (bundle.version !== 1) throw new Error('unsupported JWKS bundle version')
-  const decipher = createDecipheriv('aes-256-gcm', derivedKey, Buffer.from(bundle.iv, 'base64'))
-  decipher.setAuthTag(Buffer.from(bundle.tag, 'base64'))
-  return Buffer.concat([
-    decipher.update(Buffer.from(bundle.ciphertext, 'base64')),
-    decipher.final(),
-  ]).toString('utf8')
+  )) as { envelopes: JwksEnvelope[]; version: number }
+  if (bundle.version !== 2 || !Array.isArray(bundle.envelopes)) throw new Error('unsupported JWKS bundle version')
+  const sources = envelopeSources(environment)
+  for (const envelope of bundle.envelopes) {
+    const masterKey = sources[envelope.source]
+    if (!masterKey?.length) continue
+    try {
+      const derivedKey = Buffer.from(hkdfSync(
+        'sha256',
+        masterKey,
+        Buffer.from('djai-sign-in'),
+        Buffer.from(`oidc-jwks-bundle-v2:${envelope.source}`),
+        32,
+      ))
+      const decipher = createDecipheriv('aes-256-gcm', derivedKey, Buffer.from(envelope.iv, 'base64'))
+      decipher.setAuthTag(Buffer.from(envelope.tag, 'base64'))
+      const plaintext = Buffer.concat([
+        decipher.update(Buffer.from(envelope.ciphertext, 'base64')),
+        decipher.final(),
+      ]).toString('utf8')
+      if (containsPrivateSigningKey(parseJsonEnvironment(plaintext))) return plaintext
+    } catch {
+      // Try an envelope protected by another required server secret.
+    }
+  }
+  throw new Error('no JWKS envelope could be decrypted')
 }
 
 function normalizedJwks(environment: NodeJS.ProcessEnv): string | undefined {
@@ -99,9 +132,8 @@ function normalizedJwks(environment: NodeJS.ProcessEnv): string | undefined {
       // Fall through to the encrypted bundle.
     }
   }
-  if (!environment.CLIENT_SECRET_ENCRYPTION_KEY) return environment.OIDC_JWKS
   try {
-    return decryptBundledJwks(environment.CLIENT_SECRET_ENCRYPTION_KEY)
+    return decryptBundledJwks(environment)
   } catch {
     return environment.OIDC_JWKS
   }

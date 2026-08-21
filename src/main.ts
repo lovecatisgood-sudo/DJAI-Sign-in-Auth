@@ -2,7 +2,7 @@ import { createServer } from 'node:http'
 import type { IdentityService } from './app.js'
 
 let service: IdentityService | undefined
-let startupError = false
+let startupFailure: string | undefined
 
 const configuredPort = Number.parseInt(process.env.PORT ?? '3000', 10)
 const port = Number.isInteger(configuredPort) && configuredPort > 0 && configuredPort <= 65_535
@@ -14,11 +14,11 @@ const server = createServer((request, response) => {
   response.setHeader('Content-Type', 'application/json; charset=utf-8')
   if (request.url === '/health/live') {
     response.statusCode = 200
-    response.end(JSON.stringify({ ok: true, service: 'djai-sign-in', state: startupError ? 'failed' : 'starting' }))
+    response.end(JSON.stringify({ ok: true, service: 'djai-sign-in', state: startupFailure ? 'failed' : 'starting' }))
     return
   }
   response.statusCode = 503
-  response.end(JSON.stringify({ ok: false, state: startupError ? 'failed' : 'starting' }))
+  response.end(JSON.stringify({ ok: false, state: startupFailure ? 'failed' : 'starting', failure: startupFailure }))
 })
 
 server.listen(port, () => {
@@ -39,9 +39,28 @@ async function initialize(): Promise<void> {
     server.on('request', service.app)
     service.logger.info({ issuer: config.OIDC_ISSUER, port: config.PORT }, 'DJAI identity provider ready')
   } catch (error) {
-    startupError = true
+    startupFailure = classifyStartupFailure(error)
     console.error('DJAI identity provider failed to initialize', error)
   }
+}
+
+function classifyStartupFailure(error: unknown): string {
+  if (typeof error === 'object' && error !== null && 'issues' in error) {
+    const issues: unknown = error.issues
+    const paths = Array.isArray(issues) ? issues
+      .map((issue: unknown) => {
+        if (typeof issue !== 'object' || issue === null || !('path' in issue)) return ''
+        const path: unknown = issue.path
+        return Array.isArray(path) ? path.map(String).join('.') : ''
+      })
+      .filter(Boolean)
+      : []
+    return paths.length > 0 ? `configuration:${[...new Set(paths)].join(',')}` : 'configuration'
+  }
+  if (typeof error === 'object' && error !== null && 'code' in error && typeof error.code === 'string') {
+    return `runtime:${error.code}`
+  }
+  return 'initialization'
 }
 
 function shutdown(signal: string): void {

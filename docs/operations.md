@@ -15,9 +15,10 @@ trust anchor during rotation; multiline PEM and a single line containing literal
 `\n` sequences are both accepted. Never commit private keys or credentials.
 
 The repository contains an AES-256-GCM encrypted JWKS fallback for hosting
-platforms that cannot preserve JSON environment values. Its encryption key is
-derived with HKDF from `CLIENT_SECRET_ENCRYPTION_KEY`; plaintext signing keys
-remain excluded. Regenerate the encrypted bundle whenever either key rotates.
+platforms that cannot preserve JSON environment values. Independent envelope
+keys are derived with HKDF from required server secrets; plaintext signing keys
+remain excluded. Regenerate the encrypted bundle whenever a wrapping secret or
+the signing key rotates.
 
 ## Developer access
 
