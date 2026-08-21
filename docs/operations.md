@@ -12,7 +12,9 @@ Run cleanup at least hourly. Monitor cleanup failures, authorization errors by s
 Production database connections use verified TLS against the pinned public
 Supabase Root 2021 CA in `certs/`. `DATABASE_CA_CERT` can override the bundled
 trust anchor during rotation; multiline PEM and a single line containing literal
-`\n` sequences are both accepted. Never commit private keys or credentials.
+`\n` sequences are both accepted. The bundled certificate remains in the trust
+set, and invalid dashboard values are ignored so a filename or damaged PEM cannot
+prevent startup. Never commit private keys or credentials.
 
 The repository contains an AES-256-GCM encrypted JWKS fallback for hosting
 platforms that cannot preserve JSON environment values. Independent envelope
