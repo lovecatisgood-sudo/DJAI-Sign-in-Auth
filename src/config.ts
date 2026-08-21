@@ -66,9 +66,6 @@ export function loadConfig(environment: NodeJS.ProcessEnv = process.env): AppCon
     if (!parsed.OIDC_ISSUER.startsWith('https://')) {
       issues.push('production issuer must use HTTPS')
     }
-    if (parsed.DATABASE_SSL === 'require' && !parsed.DATABASE_CA_CERT) {
-      issues.push('DATABASE_CA_CERT is required for verified production database TLS')
-    }
   }
 
   if (parsed.DEVELOPER_CONSOLE_ENABLED && parsed.DEVELOPER_EMAIL_ALLOWLIST.length === 0) {

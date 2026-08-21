@@ -36,14 +36,12 @@ describe('loadConfig', () => {
     expect(() => loadConfig(input)).toThrow('production OIDC_ISSUER must be exactly https://id.djai.academy')
   })
 
-  it('requires a trusted database CA for production TLS', async () => {
+  it('accepts a newline-encoded database CA override', async () => {
     const input = await environment({
       NODE_ENV: 'production',
       OIDC_ISSUER: 'https://id.djai.academy',
       DATABASE_SSL: 'require',
     })
-    expect(() => loadConfig(input)).toThrow('DATABASE_CA_CERT')
-
     const config = loadConfig({
       ...input,
       DATABASE_CA_CERT: '-----BEGIN CERTIFICATE-----\\ncertificate-data\\n-----END CERTIFICATE-----',

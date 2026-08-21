@@ -9,10 +9,10 @@
 
 Run cleanup at least hourly. Monitor cleanup failures, authorization errors by safe category, database saturation, token endpoint latency, provider 5xx rates, callback mismatch attempts and signing-key/JWKS readiness.
 
-Production database connections use verified TLS. Download the project-specific
-server root certificate from Supabase Database Settings and set its PEM content as
-`DATABASE_CA_CERT`. Multiline PEM and a single line containing literal `\n`
-sequences are both accepted. Never commit the certificate to the repository.
+Production database connections use verified TLS against the pinned public
+Supabase Root 2021 CA in `certs/`. `DATABASE_CA_CERT` can override the bundled
+trust anchor during rotation; multiline PEM and a single line containing literal
+`\n` sequences are both accepted. Never commit private keys or credentials.
 
 ## Developer access
 
