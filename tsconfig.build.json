@@ -4,7 +4,8 @@
     "outDir": "dist",
     "rootDir": ".",
     "sourceMap": true,
-    "declaration": false
+    "declaration": false,
+    "types": ["node"]
   },
   "include": ["src/**/*.ts", "scripts/**/*.ts"],
   "exclude": ["test", "dist"]
