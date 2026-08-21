@@ -69,3 +69,23 @@
   - CHECK: compare user request + `PROJECT_INTENT.md` directly to repository; write `RECONCILIATION.md` after final code/config changes.
   - EXPECT: PASS with every invariant/outcome addressed and remaining external release actions explicit.
   - EVIDENCE: `RECONCILIATION.md`, written after the final implementation and verification changes.
+
+- [x] G15: reproduce the live callback failure from production state.
+  - CHECK: inspect the production Supabase `auth.flow_state.referrer` and provider security events after the user's Google attempt.
+  - EXPECT: evidence identifies the actual callback host instead of inferring from the generated authorization URL.
+  - EVIDENCE: the 2026-08-21 user attempt issued a Google auth code with referrer `https://school.djai.academy/`; no provider `login_succeeded` event existed. The earlier completion claim was invalid.
+
+- [x] G16: the dynamic provider callback is accepted by Supabase.
+  - CHECK: add the narrow production pattern for `/auth/callback?tx=*`, initiate a fresh live provider Google transaction, and inspect the new `auth.flow_state.referrer`.
+  - EXPECT: the stored referrer begins `https://id.djai.academy/auth/callback?tx=` and never uses the School site URL.
+  - EVIDENCE: after adding the narrow transaction patterns, a fresh live Google authorization produced a Supabase flow-state referrer on `https://id.djai.academy/auth/callback?tx=...` and continued with HTTP 302 to Google. The School Site URL was not substituted.
+
+- [ ] G17: real existing-account Google completion resumes DJAI OIDC.
+  - CHECK: after a fresh real Google attempt, inspect provider security events and the requesting app callback.
+  - EXPECT: provider records `login_succeeded` for the existing UID and Canvas receives its callback; School onboarding is not visited.
+  - EVIDENCE: pending real-account confirmation.
+
+- [ ] G18: fresh reconciliation after production configuration and live callback evidence.
+  - CHECK: compare the user's exact outcome directly with production state and actual event trail.
+  - EXPECT: PASS only after G16 and G17; configuration readback or build success alone is insufficient.
+  - EVIDENCE: pending.

@@ -10,7 +10,7 @@ Repository checks alone do not authorize or complete a production deployment.
 - [ ] Managed secret storage for cookie, transaction, client-encryption and Supabase keys
 - [ ] Managed RS256 signing-key generation, custody, overlap and emergency rotation
 - [ ] Supabase production authorization for this service
-- [ ] Supabase Google and email callback allowlist for `https://id.djai.academy/auth/callback` and `https://id.djai.academy/developer/auth/callback`
+- [x] Supabase Google and email callback allowlist includes the transaction-aware production patterns `https://id.djai.academy/auth/callback?tx=*` and `https://id.djai.academy/developer/auth/callback?tx=*`. Bare callback paths are insufficient because Supabase otherwise substitutes the School Site URL for callbacks containing `?tx=...`.
 - [ ] Exact initial `DEVELOPER_EMAIL_ALLOWLIST` reviewed; developer console login and revocation tested
 - [ ] `@djai/auth-express` and `create-djai-auth` published to the approved npm registry
 - [ ] Email templates verified to preserve the PKCE callback and transaction query

@@ -17,6 +17,7 @@ Make adding “Sign in with DJAI School” to a future first-party app feel comp
 
 ## Required user outcomes
 
+- A Google sign-in started inside a DJAI OIDC interaction returns to that exact `id.djai.academy` transaction and then to the requesting app; it must never fall back to the School site or trigger School onboarding.
 - An approved developer can sign into a hosted console with a verified, active DJAI School account.
 - The console can list, create, rotate, and revoke only that developer’s clients.
 - The same lifecycle is available through an authenticated, rate-limited API for a CLI.
@@ -35,6 +36,7 @@ Make adding “Sign in with DJAI School” to a future first-party app feel comp
 
 ## Authoritative sources
 
+- User's live 2026-08-21 report: Google sign-in for an existing verified DJAI account still landed in the School survey. Real callback routing is authoritative over configuration-only smoke checks.
 - User direction in this thread: future apps should add DJAI login without manual wiring; apps retain DJAI UID and email.
 - `AGENTS.md` authentication-only and first-party constraints.
 - Existing protocol contract in `src/provider.ts` and `test/provider.test.ts`.

@@ -2,7 +2,7 @@
 
 Date: 2026-08-21
 
-Result: **PASS for repository implementation and release artifacts.** Production deployment and npm publication remain explicit external release operations; the repository does not claim that those account-side actions have occurred.
+Result: **INVALIDATED by live production evidence.** On 2026-08-21 an existing verified Google-linked DJAI account was sent to the School site instead of returning to the provider transaction. G15–G18 must pass before this reconciliation can return to PASS.
 
 ## Goal-to-repository comparison
 
