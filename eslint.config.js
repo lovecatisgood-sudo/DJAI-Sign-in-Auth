@@ -3,7 +3,7 @@ import globals from 'globals'
 import tseslint from 'typescript-eslint'
 
 export default tseslint.config(
-  { ignores: ['eslint.config.js', 'dist/**', 'coverage/**', 'node_modules/**'] },
+  { ignores: ['eslint.config.js', '**/dist/**', 'coverage/**', 'node_modules/**'] },
   js.configs.recommended,
   ...tseslint.configs.recommendedTypeChecked,
   {
@@ -23,7 +23,7 @@ export default tseslint.config(
     },
   },
   {
-    files: ['test/**/*.ts'],
+    files: ['test/**/*.ts', 'packages/**/test/**/*.ts'],
     rules: {
       '@typescript-eslint/require-await': 'off',
     },

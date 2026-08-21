@@ -10,7 +10,7 @@
   "scripts": {
     "dev": "tsx watch src/main.ts",
     "build": "tsc -p tsconfig.build.json",
-    "start": "node dist/main.js",
+    "start": "node dist/scripts/migrate.js && node dist/src/main.js",
     "typecheck": "tsc --noEmit",
     "lint": "eslint .",
     "test": "vitest run",
@@ -23,7 +23,8 @@
     "db:cleanup": "tsx scripts/cleanup.ts",
     "keys:generate": "tsx scripts/generate-signing-key.ts",
     "verify:discovery": "tsx scripts/verify-discovery.ts",
-    "verify": "npm run typecheck && npm run lint && npm test && npm run build"
+    "sdk:build": "tsc -p packages/auth-express/tsconfig.json && tsc -p packages/create-djai-auth/tsconfig.json",
+    "verify": "npm run typecheck && npm run lint && npm test && npm run build && npm run sdk:build"
   },
   "dependencies": {
     "@supabase/supabase-js": "2.112.3",

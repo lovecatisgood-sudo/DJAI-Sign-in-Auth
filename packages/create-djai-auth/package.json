@@ -1,0 +1,13 @@
+{
+  "name": "create-djai-auth",
+  "version": "0.1.0",
+  "description": "Register and scaffold Sign in with DJAI School",
+  "type": "module",
+  "license": "UNLICENSED",
+  "engines": { "node": ">=22" },
+  "bin": { "create-djai-auth": "./dist/cli.js" },
+  "exports": "./dist/scaffold.js",
+  "files": ["dist", "README.md"],
+  "scripts": { "build": "tsc -p tsconfig.json" },
+  "devDependencies": { "@types/node": "24.10.1", "typescript": "5.9.3" }
+}

@@ -10,7 +10,9 @@ Repository checks alone do not authorize or complete a production deployment.
 - [ ] Managed secret storage for cookie, transaction, client-encryption and Supabase keys
 - [ ] Managed RS256 signing-key generation, custody, overlap and emergency rotation
 - [ ] Supabase production authorization for this service
-- [ ] Supabase Google and email callback allowlist for `https://id.djai.academy/auth/callback`
+- [ ] Supabase Google and email callback allowlist for `https://id.djai.academy/auth/callback` and `https://id.djai.academy/developer/auth/callback`
+- [ ] Exact initial `DEVELOPER_EMAIL_ALLOWLIST` reviewed; developer console login and revocation tested
+- [ ] `@djai/auth-express` and `create-djai-auth` published to the approved npm registry
 - [ ] Email templates verified to preserve the PKCE callback and transaction query
 - [ ] First production application privacy, terms, owner, security contact and exact callback
 - [ ] Monitoring, alerting, retention, on-call and incident ownership
@@ -28,6 +30,7 @@ Repository checks alone do not authorize or complete a production deployment.
 - encryption keys decode to independent 32-byte values
 - private JWKS is present only in managed secrets
 - no example or staging client is active
+- developer console is enabled only with reviewed exact-email bootstrap entries
 - logs and tracing redact credentials and email
 
 ## Go-live smoke test
@@ -41,6 +44,4 @@ Repository checks alone do not authorize or complete a production deployment.
 7. Confirm local application logout does not globally sign out DJAI.
 8. Confirm observability contains no tokens, codes, secrets, passwords or raw email.
 
-## Known pre-deployment decision
-
-Client-secret rotation currently replaces one active secret and requires a coordinated provider restart. Complete the maintenance procedure in the client-registration runbook or implement reviewed overlapping credentials before any application requiring zero-downtime secret rotation.
+Client-secret rotation immediately replaces one active secret. Applications that require overlap must add reviewed versioned credentials before go-live; no provider restart is required.

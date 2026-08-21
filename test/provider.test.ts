@@ -140,9 +140,55 @@ describe('minimal DJAI OIDC provider', () => {
     expect(replay.status).toBe(400)
     expect(await replay.json()).toMatchObject({ error: 'invalid_grant' })
   })
+
+  it('applies dynamic client rotation and revocation without provider restart', async () => {
+    const fixture = await providerFixture(true)
+    const verifier = randomBytes(48).toString('base64url')
+    const challenge = createHash('sha256').update(verifier).digest('base64url')
+    const authorize = new URL('/oauth/authorize', fixture.issuer)
+    authorize.search = new URLSearchParams({
+      response_type: 'code', client_id: client.client_id, redirect_uri: callbackUri,
+      scope: 'openid email', state: 'rotation-state', nonce: 'rotation-nonce',
+      code_challenge: challenge, code_challenge_method: 'S256',
+    }).toString()
+    let next = authorize.toString()
+    let cookies = ''
+    for (let index = 0; index < 16; index += 1) {
+      const response = await fetch(next, { redirect: 'manual', headers: cookies ? { cookie: cookies } : {} })
+      cookies = mergeCookies(cookies, response.headers.getSetCookie())
+      const location = response.headers.get('location')
+      expect(location).toBeTruthy()
+      next = new URL(location!, next).toString()
+      if (next.startsWith(callbackUri)) break
+    }
+    const code = new URL(next).searchParams.get('code')
+    expect(code).toBeTruthy()
+
+    const rotatedSecret = 'rotated-secret-with-enough-entropy'
+    await new MemoryAdapter('Client').upsert(client.client_id, { ...client, client_secret: rotatedSecret })
+    const tokenBody = new URLSearchParams({
+      grant_type: 'authorization_code', code: code!, redirect_uri: callbackUri, code_verifier: verifier,
+    })
+    const oldSecret = await fetch(`${fixture.issuer}/oauth/token`, {
+      method: 'POST',
+      headers: { authorization: `Basic ${Buffer.from(`${client.client_id}:${client.client_secret}`).toString('base64')}`, 'content-type': 'application/x-www-form-urlencoded' },
+      body: tokenBody,
+    })
+    expect(oldSecret.status).toBe(401)
+    const newSecret = await fetch(`${fixture.issuer}/oauth/token`, {
+      method: 'POST',
+      headers: { authorization: `Basic ${Buffer.from(`${client.client_id}:${rotatedSecret}`).toString('base64')}`, 'content-type': 'application/x-www-form-urlencoded' },
+      body: tokenBody,
+    })
+    expect(newSecret.status).toBe(200)
+
+    await new MemoryAdapter('Client').destroy(client.client_id)
+    const revokedAuthorize = await fetch(authorize, { redirect: 'manual' })
+    expect(revokedAuthorize.status).toBe(400)
+  })
 })
 
-async function providerFixture() {
+async function providerFixture(dynamicClient = false) {
   const server = createServer()
   servers.push(server)
   server.listen(0, '127.0.0.1')
@@ -159,6 +205,7 @@ async function providerFixture() {
     OIDC_COOKIE_KEYS: ['a'.repeat(32), 'b'.repeat(32)], AUTH_TRANSACTION_KEY: Buffer.alloc(32, 1),
     CLIENT_SECRET_ENCRYPTION_KEY: Buffer.alloc(32, 2), OIDC_JWKS: { keys: [{ ...jwk, kid: 'test-key', alg: 'RS256', use: 'sig' }] },
     TRUST_PROXY: false, LOG_LEVEL: 'silent', ENABLE_SIGNUP: true,
+    DEVELOPER_CONSOLE_ENABLED: false, DEVELOPER_EMAIL_ALLOWLIST: [],
     ACCESS_TOKEN_TTL_SECONDS: 300, ID_TOKEN_TTL_SECONDS: 300, AUTH_CODE_TTL_SECONDS: 90,
     INTERACTION_TTL_SECONDS: 600, SESSION_TTL_SECONDS: 3600,
   } satisfies AppConfig
@@ -167,8 +214,9 @@ async function providerFixture() {
   } as unknown as IdentityDirectory
   const grants = new Map<string, string>()
   const confirmations = { grantId: async (_accountId: string, clientId: string) => grants.get(clientId) } as unknown as ConfirmationRepository
+  if (dynamicClient) await new MemoryAdapter('Client').upsert(client.client_id, client as AdapterPayload)
   const provider = createProvider(config, {
-    clients: [client], confirmations, identity, logger: createLogger(config), adapter: MemoryAdapter,
+    clients: dynamicClient ? [] : [client], confirmations, identity, logger: createLogger(config), adapter: MemoryAdapter,
   })
 
   const prompts: string[] = []

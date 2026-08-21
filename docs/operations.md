@@ -9,6 +9,14 @@
 
 Run cleanup at least hourly. Monitor cleanup failures, authorization errors by safe category, database saturation, token endpoint latency, provider 5xx rates, callback mismatch attempts and signing-key/JWKS readiness.
 
+## Developer access
+
+- Bootstrap exact first-party developer emails through `DEVELOPER_EMAIL_ALLOWLIST`.
+- The first successful verified/active login creates the audited developer record.
+- Remove a developer by setting `active=false` and `revoked_at=now()` in the reviewed operator workflow; current console sessions and API tokens fail on their next request because School and developer status are rechecked.
+- Developer tokens are personal. Never share them between people or CI systems; create a separately named token for each use and revoke it when retired.
+- Monitor registration/rotation/revocation volume, token failures, cross-owner denials, and unusual callback-domain changes.
+
 ## Signing-key rotation
 
 1. Generate a new RS256 key in the approved key-custody system.

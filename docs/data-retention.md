@@ -4,6 +4,8 @@
 |---|---|
 | Authorization interactions and codes | Until expiry, then cleanup within one hour |
 | Opaque access-token artifacts | Until expiry, then cleanup within one hour |
+| Expired or revoked developer CLI tokens | 90 days after expiry or revocation |
+| Developer control-plane audit events | 2 years |
 | First-party confirmation | While the client and account relationship remains valid |
 | Redacted security events | 90 days |
 | Client audit history | 2 years |

@@ -40,4 +40,14 @@ describe('loadConfig', () => {
     const input = await environment({ OIDC_COOKIE_KEYS: 'only-one-key' })
     expect(() => loadConfig(input)).toThrow('at least two')
   })
+
+  it('requires an exact developer allowlist when the console is enabled', async () => {
+    const input = await environment({ DEVELOPER_CONSOLE_ENABLED: 'true', DEVELOPER_EMAIL_ALLOWLIST: '' })
+    expect(() => loadConfig(input)).toThrow('DEVELOPER_EMAIL_ALLOWLIST')
+    const config = loadConfig(await environment({
+      DEVELOPER_CONSOLE_ENABLED: 'true',
+      DEVELOPER_EMAIL_ALLOWLIST: ' Developer@DJAI.Academy ',
+    }))
+    expect(config.DEVELOPER_EMAIL_ALLOWLIST).toEqual(['developer@djai.academy'])
+  })
 })

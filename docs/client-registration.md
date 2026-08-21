@@ -1,32 +1,39 @@
 # Client registration
 
-Client registration is manual and audited. Dynamic registration is disabled.
+OIDC dynamic registration is disabled. Approved first-party developers use the authenticated DJAI control plane instead.
 
-## Rules
+## Normal workflow
 
-- Use confidential server-rendered web clients only.
-- Use Authorization Code, response type `code`, PKCE S256 and `client_secret_basic`.
-- Permit only `openid email`.
-- Use exact HTTPS callbacks. Development may use explicit HTTP loopback callbacks.
-- Keep each environment separate.
-- Register application, privacy, terms, owner and security metadata.
+1. Sign into `/developer` with a verified, active, approved DJAI School account.
+2. Create the application in the console, or create a personal CLI token.
+3. Run `npx create-djai-auth` with the app name, environment, exact callback, home, privacy, and terms URLs.
+4. Store `.env.djai` in the application secret manager before deployment.
+5. Install `@djai/auth-express`, mount the generated router at `/auth/djai`, and link the login button to `/auth/djai/login`.
 
-## Lifecycle
+The client secret is returned once. List APIs and console pages never return it again. Client ownership is bound to the developer’s stable DJAI subject, not email.
 
-Register with `npm run client:register`. The secret is displayed once and encrypted in the provider registry. Move it immediately to the application's secret manager.
+## Rules enforced automatically
 
-Rotate with:
+- Confidential web client only
+- Authorization Code and PKCE S256
+- `client_secret_basic`
+- Exactly `openid email`
+- Exact callback matching
+- HTTPS for staging/production
+- HTTP only for explicit development loopback URLs
+- Separate client credentials per environment
+- Home, privacy, and terms URL metadata
+
+## Rotation and revocation
+
+The console and API rotate or revoke immediately without provider restart. Rotation invalidates the old secret immediately, so update the application secret in the same maintenance operation. Revocation removes the client from authorization and token lookup immediately.
+
+Operator scripts remain available for bootstrap and incident recovery:
 
 ```bash
-npm run client:rotate-secret -- --id <client-id> --actor <operator>
+npm run client:register
+npm run client:rotate-secret
+npm run client:revoke
 ```
 
-The current implementation performs immediate replacement rather than overlapping client secrets. Coordinate the downstream secret update and provider rolling restart in one maintenance window. If zero-downtime client-secret overlap is required, add versioned credentials through a reviewed migration before production adoption.
-
-Revoke with:
-
-```bash
-npm run client:revoke -- --id <client-id> --actor <operator>
-```
-
-Restart provider instances after any registration change. Revocation also requires disabling the downstream login entry point and investigating callback/domain compromise.
+They are not the normal application-onboarding path.

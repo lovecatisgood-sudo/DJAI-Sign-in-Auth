@@ -7,6 +7,8 @@
 | Supabase Auth | Password/social authentication, verified email, immutable user UUID |
 | DJAI School profile data | Active or suspended account status |
 | DJAI Sign In | OIDC protocol, client registry, login interactions, confirmations, signed identity assertions |
+| DJAI developer control plane | Approved-developer sessions, owned client lifecycle, personal CLI tokens, one-time credentials and audit |
+| `@djai/auth-express` | Downstream discovery, PKCE transaction, token validation, encrypted session and identity persistence |
 | Downstream application | Product account, profile, permissions, billing, data, local sessions and logout |
 
 The provider is a single central service. Downstream applications never deploy provider code and never receive Supabase sessions or administrative credentials.
@@ -27,7 +29,7 @@ The provider is a single central service. Downstream applications never deploy p
 
 ## Persistence
 
-The `oidc-provider` adapter stores protocol artifacts in PostgreSQL. Authorization-code consumption is a conditional database update so concurrent replay cannot succeed twice. The client registry encrypts client secrets at rest with AES-256-GCM and records registration, rotation, and revocation events.
+The `oidc-provider` adapter stores protocol artifacts in PostgreSQL. Authorization-code consumption is a conditional database update so concurrent replay cannot succeed twice. Client lookup is live from the encrypted registry on every protocol lookup; metadata hashes are cached only by `oidc-provider`. Registration, rotation, and revocation therefore take effect without restart. Lifecycle actions record the exact developer/operator actor.
 
 Remembered confirmations point to provider grants. They carry only `openid email` and are not delegated API authorizations.
 
@@ -41,4 +43,8 @@ The ID token is the identity assertion. An incidental short-lived opaque access 
 
 ## Scaling
 
-Provider instances are stateless apart from secrets and use shared PostgreSQL. Client changes require a controlled rolling restart because active clients are loaded and validated during process startup. Health checks distinguish liveness from database readiness.
+Provider instances are stateless apart from secrets and use shared PostgreSQL. Client lifecycle changes are immediately visible across instances. Health checks distinguish liveness from database readiness.
+
+## Developer control plane
+
+OIDC dynamic registration remains disabled. `/developer` is a separate first-party control plane. A user must pass normal Supabase authentication, verified/active School-account checks, and the approved developer registry. Exact environment-email allowlisting can bootstrap a developer; later requests recheck both School status and developer status. Personal CLI tokens are random, hashed at rest, expirable, revocable, rate-limited, and scoped to their owner.

@@ -11,7 +11,7 @@ try {
     filename text primary key,
     applied_at timestamptz not null default now()
   )`)
-  const directory = resolve(import.meta.dirname, '../migrations')
+  const directory = resolve(process.cwd(), 'migrations')
   const files = (await readdir(directory)).filter((file) => file.endsWith('.sql')).sort()
   for (const filename of files) {
     const exists = await database.query('select 1 from oidc_schema_migrations where filename = $1', [filename])

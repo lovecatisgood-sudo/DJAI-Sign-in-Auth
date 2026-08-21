@@ -6,6 +6,7 @@ export class CsrfProtection {
   constructor(
     private readonly secret: Buffer,
     private readonly secure: boolean,
+    private readonly name = 'djai-csrf',
   ) {}
 
   issue(response: Response, interactionUid: string): string {
@@ -39,6 +40,6 @@ export class CsrfProtection {
   }
 
   private get cookieName(): string {
-    return this.secure ? '__Host-djai-csrf' : 'djai-csrf'
+    return this.secure ? `__Host-${this.name}` : this.name
   }
 }

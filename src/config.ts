@@ -32,6 +32,8 @@ const schema = z.object({
   TRUST_PROXY: z.enum(['true', 'false']).default('true').transform((value) => value === 'true'),
   LOG_LEVEL: z.enum(['fatal', 'error', 'warn', 'info', 'debug', 'trace', 'silent']).default('info'),
   ENABLE_SIGNUP: z.enum(['true', 'false']).default('true').transform((value) => value === 'true'),
+  DEVELOPER_CONSOLE_ENABLED: z.enum(['true', 'false']).default('false').transform((value) => value === 'true'),
+  DEVELOPER_EMAIL_ALLOWLIST: z.string().default('').transform((value) => value.split(',').map((email) => email.trim().toLowerCase()).filter(Boolean)),
   ACCESS_TOKEN_TTL_SECONDS: z.coerce.number().int().min(60).max(900).default(300),
   ID_TOKEN_TTL_SECONDS: z.coerce.number().int().min(60).max(900).default(300),
   AUTH_CODE_TTL_SECONDS: z.coerce.number().int().min(30).max(300).default(90),
@@ -62,6 +64,10 @@ export function loadConfig(environment: NodeJS.ProcessEnv = process.env): AppCon
     if (!parsed.OIDC_ISSUER.startsWith('https://')) {
       issues.push('production issuer must use HTTPS')
     }
+  }
+
+  if (parsed.DEVELOPER_CONSOLE_ENABLED && parsed.DEVELOPER_EMAIL_ALLOWLIST.length === 0) {
+    issues.push('DEVELOPER_EMAIL_ALLOWLIST must contain at least one exact email when the developer console is enabled')
   }
 
   if (issues.length > 0) {

@@ -9,6 +9,7 @@
 - Supabase server credentials
 - provider sessions and authentication transactions
 - client registry integrity
+- developer console sessions, developer approvals, personal CLI tokens and client ownership
 
 ## Primary attackers
 
@@ -31,8 +32,12 @@
 | Account enumeration | Generic login/signup errors; no email-existence endpoint |
 | Email account takeover | Match `(issuer, sub)`; never silently link by email |
 | Suspended account login | Check verified/active identity during login and token exchange |
-| Client compromise | Audited deactivation, secret rotation, exact callbacks, provider restart |
+| Client compromise | Audited immediate deactivation, secret rotation and exact callbacks |
 | Secret leakage | Server-side storage, encryption at rest, redacted logs, no URL/browser storage |
+| Open/hostile registration | OIDC dynamic registration disabled; verified active School identity plus approved developer record |
+| Stolen developer token | Random high entropy, SHA-256 hash at rest, expiry, revocation, owner scope, rate limiting and current School-status recheck |
+| Cross-developer access | Every list/mutation query constrained by stable developer subject; missing ownership returns no client metadata |
+| Cached one-time credential | `Cache-Control: no-store`; secret/token displayed once and omitted from list APIs |
 | Stored or reflected XSS | Escaped client metadata, no scripts, restrictive CSP, external stylesheet |
 | Clickjacking | `frame-ancestors 'none'` and frame-denial headers |
 | Database race | Conditional artifact consumption and database uniqueness |

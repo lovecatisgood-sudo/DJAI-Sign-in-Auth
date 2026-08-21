@@ -23,8 +23,26 @@ export type ClientRegistration = z.infer<typeof registrationSchema>
 interface ClientRow {
   client_id: string
   display_name: string
+  environment: 'development' | 'staging' | 'production'
   metadata: ClientMetadata
   secret_ciphertext: string
+  active: boolean
+  created_by_subject: string | null
+  created_at: Date
+  updated_at: Date
+}
+
+export interface ClientSummary {
+  clientId: string
+  displayName: string
+  environment: 'development' | 'staging' | 'production'
+  redirectUris: readonly string[]
+  homeUrl: string
+  policyUrl: string
+  termsUrl: string
+  active: boolean
+  createdAt: Date
+  updatedAt: Date
 }
 
 export class ClientRegistry {
@@ -48,7 +66,48 @@ export class ClientRegistry {
     }))
   }
 
-  async register(input: ClientRegistration, actor: string): Promise<{ clientId: string; clientSecret: string }> {
+  async findActive(clientId: string): Promise<ClientMetadata | undefined> {
+    const result = await this.database.query<ClientRow>(
+      `select client_id, display_name, environment, metadata, secret_ciphertext,
+              active, created_by_subject, created_at, updated_at
+       from oidc_clients
+       where client_id = $1 and active = true and revoked_at is null`,
+      [clientId],
+    )
+    const row = result.rows[0]
+    if (!row) return undefined
+    return {
+      ...row.metadata,
+      client_id: row.client_id,
+      client_name: row.display_name,
+      client_secret: this.secrets.open(row.secret_ciphertext),
+    }
+  }
+
+  async listForDeveloper(subject: string): Promise<ClientSummary[]> {
+    const result = await this.database.query<ClientRow>(
+      `select client_id, display_name, environment, metadata, secret_ciphertext,
+              active, created_by_subject, created_at, updated_at
+       from oidc_clients
+       where created_by_subject = $1::uuid
+       order by created_at desc`,
+      [subject],
+    )
+    return result.rows.map((row) => ({
+      clientId: row.client_id,
+      displayName: row.display_name,
+      environment: row.environment,
+      redirectUris: row.metadata.redirect_uris ?? [],
+      homeUrl: row.metadata.client_uri ?? '',
+      policyUrl: row.metadata.policy_uri ?? '',
+      termsUrl: row.metadata.tos_uri ?? '',
+      active: row.active,
+      createdAt: row.created_at,
+      updatedAt: row.updated_at,
+    }))
+  }
+
+  async register(input: ClientRegistration, actor: string, createdBySubject?: string): Promise<{ clientId: string; clientSecret: string }> {
     const registration = registrationSchema.parse(input)
     validateClientUrls(registration)
     const clientSecret = randomBytes(32).toString('base64url')
@@ -75,8 +134,8 @@ export class ClientRegistry {
       await connection.query(
         `insert into oidc_clients (
            client_id, display_name, environment, metadata, secret_ciphertext,
-           owner_email, security_contact
-         ) values ($1, $2, $3, $4::jsonb, $5, $6, $7)`,
+           owner_email, security_contact, created_by_subject
+         ) values ($1, $2, $3, $4::jsonb, $5, $6, $7, $8::uuid)`,
         [
           registration.clientId,
           registration.displayName,
@@ -85,6 +144,7 @@ export class ClientRegistry {
           this.secrets.seal(clientSecret),
           registration.ownerEmail,
           registration.securityContact,
+          createdBySubject ?? null,
         ],
       )
       await connection.query(
@@ -102,7 +162,7 @@ export class ClientRegistry {
     return { clientId: registration.clientId, clientSecret }
   }
 
-  async rotateSecret(clientId: string, actor: string): Promise<string> {
+  async rotateSecret(clientId: string, actor: string, ownerSubject?: string): Promise<string> {
     const clientSecret = randomBytes(32).toString('base64url')
     const connection = await this.database.connect()
     try {
@@ -110,8 +170,9 @@ export class ClientRegistry {
       const updated = await connection.query(
         `update oidc_clients
          set secret_ciphertext = $2, updated_at = now()
-         where client_id = $1 and active = true and revoked_at is null`,
-        [clientId, this.secrets.seal(clientSecret)],
+         where client_id = $1 and active = true and revoked_at is null
+           and ($3::uuid is null or created_by_subject = $3::uuid)`,
+        [clientId, this.secrets.seal(clientSecret), ownerSubject ?? null],
       )
       if (updated.rowCount !== 1) throw new Error('Active client not found')
       await connection.query(
@@ -129,15 +190,16 @@ export class ClientRegistry {
     return clientSecret
   }
 
-  async revoke(clientId: string, actor: string): Promise<void> {
+  async revoke(clientId: string, actor: string, ownerSubject?: string): Promise<void> {
     const connection = await this.database.connect()
     try {
       await connection.query('begin')
       const updated = await connection.query(
         `update oidc_clients
          set active = false, revoked_at = now(), updated_at = now()
-         where client_id = $1 and active = true`,
-        [clientId],
+         where client_id = $1 and active = true
+           and ($2::uuid is null or created_by_subject = $2::uuid)`,
+        [clientId, ownerSubject ?? null],
       )
       if (updated.rowCount !== 1) throw new Error('Active client not found')
       await connection.query(

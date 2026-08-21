@@ -1,3 +1,4 @@
+import { createHmac } from 'node:crypto'
 import express, { type ErrorRequestHandler, type RequestHandler } from 'express'
 import { rateLimit } from 'express-rate-limit'
 import helmet from 'helmet'
@@ -8,6 +9,9 @@ import { ConfirmationRepository } from './confirmations.js'
 import { CsrfProtection } from './csrf.js'
 import { ClientRegistry } from './client-registry.js'
 import { createDatabase, verifyDatabase, type Database } from './database.js'
+import { DeveloperAccess } from './developer-access.js'
+import { developerRouter } from './developer-router.js'
+import { DeveloperSession } from './developer-session.js'
 import { AuthTransactionCookie } from './auth-transaction.js'
 import { IdentityDirectory } from './identity.js'
 import { interactionRouter } from './interactions.js'
@@ -36,15 +40,15 @@ export async function createIdentityService(config: AppConfig): Promise<Identity
   const clientSecrets = new SecretBox(config.CLIENT_SECRET_ENCRYPTION_KEY)
   const authSecrets = new SecretBox(config.AUTH_TRANSACTION_KEY)
   const registry = new ClientRegistry(database, clientSecrets)
-  const clients = await registry.activeClients()
   const identity = new IdentityDirectory(config)
+  const auth = new SupabaseAuthentication(config)
   const confirmations = new ConfirmationRepository(database)
   const provider = createProvider(config, {
-    clients,
+    clients: [],
     confirmations,
     identity,
     logger,
-    adapter: postgresAdapter(database),
+    adapter: postgresAdapter(database, registry),
   })
 
   const app = express()
@@ -81,6 +85,7 @@ export async function createIdentityService(config: AppConfig): Promise<Identity
     try {
       await verifyDatabase(database)
       const discovery = new URL('/.well-known/openid-configuration', config.OIDC_ISSUER).toString()
+      const clients = await registry.activeClients()
       return response.json({ ok: true, issuer: config.OIDC_ISSUER, discovery, clients: clients.length })
     } catch (error) {
       request.log.error({ err: error }, 'readiness check failed')
@@ -90,10 +95,23 @@ export async function createIdentityService(config: AppConfig): Promise<Identity
 
   const secureCookies = config.NODE_ENV !== 'development'
   const csrf = new CsrfProtection(config.AUTH_TRANSACTION_KEY, secureCookies)
+  const developerCsrf = new CsrfProtection(config.AUTH_TRANSACTION_KEY, secureCookies, 'djai-developer-csrf')
+  const developerSecrets = new SecretBox(createHmac('sha256', config.AUTH_TRANSACTION_KEY).update('djai-developer-session-v1').digest())
+  const authTransaction = new AuthTransactionCookie(authSecrets, secureCookies)
   const securityEvents = new SecurityEvents(database, logger, config.AUTH_TRANSACTION_KEY)
+  app.use(developerRouter({
+    access: new DeveloperAccess(database, config),
+    auth,
+    authTransaction,
+    clients: registry,
+    config,
+    csrf: developerCsrf,
+    identity,
+    session: new DeveloperSession(developerSecrets, secureCookies),
+  }))
   app.use(interactionRouter({
-    auth: new SupabaseAuthentication(config),
-    authTransaction: new AuthTransactionCookie(authSecrets, secureCookies),
+    auth,
+    authTransaction,
     config,
     confirmations,
     csrf,

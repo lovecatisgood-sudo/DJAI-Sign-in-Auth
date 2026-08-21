@@ -1,7 +1,8 @@
 import type { Adapter, AdapterPayload } from 'oidc-provider'
 import type { Database } from './database.js'
+import type { ClientRegistry } from './client-registry.js'
 
-export function postgresAdapter(database: Database) {
+export function postgresAdapter(database: Database, clients?: Pick<ClientRegistry, 'findActive'>) {
   return class PostgresAdapter implements Adapter {
     constructor(private readonly model: string) {}
 
@@ -19,6 +20,9 @@ export function postgresAdapter(database: Database) {
     }
 
     async find(id: string): Promise<AdapterPayload | undefined> {
+      if (this.model === 'Client' && clients) {
+        return await clients.findActive(id) as AdapterPayload | undefined
+      }
       const result = await database.query<{ payload: AdapterPayload }>(
         `select payload
          from oidc_provider_payloads

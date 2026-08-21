@@ -25,6 +25,8 @@ Refresh tokens, UserInfo, delegated API scopes, dynamic registration, global log
 - `src/`: deployable identity provider and interactions
 - `migrations/`: PostgreSQL persistence, registry, confirmation, and audit schema
 - `scripts/`: migrations, client registration/revocation, key generation, and health verification
+- `packages/auth-express/`: one-router application adapter
+- `packages/create-djai-auth/`: self-service registration and scaffolding CLI
 - `test/`: protocol, replay, configuration, cryptography, and scope tests
 - `examples/`: integration recipes for new applications
 - `docs/`: architecture, onboarding, operations, threat model, and incident response
@@ -46,25 +48,31 @@ Move the generated private JWKS into `OIDC_JWKS` in local `.env`. Generate indep
 
 The provider will not start without its database, signing key, Supabase credentials, and secure key configuration. Production startup additionally rejects every issuer except `https://id.djai.academy`.
 
-## Register the first application
+## Self-service application setup
 
-After migrations and configuration:
+Enable the developer console with exact approved DJAI School emails:
 
-```bash
-npm run client:register -- \
-  --id djai-studio-staging \
-  --name "DJAI Studio Staging" \
-  --environment staging \
-  --redirect https://studio-staging.example/auth/callback \
-  --home https://studio-staging.example/ \
-  --privacy https://studio-staging.example/privacy \
-  --terms https://studio-staging.example/terms \
-  --owner owner@example.com \
-  --security security@example.com \
-  --actor operator@example.com
+```text
+DEVELOPER_CONSOLE_ENABLED=true
+DEVELOPER_EMAIL_ALLOWLIST=developer@djai.academy
 ```
 
-The command displays the client secret once. Store it in the application's server-side secret manager and restart provider instances to load the registration.
+An approved developer signs in at `https://id.djai.academy/developer`, creates a personal CLI token, then runs:
+
+```bash
+export DJAI_DEVELOPER_TOKEN=<token-shown-once>
+npx create-djai-auth \
+  --name "My App" \
+  --environment development \
+  --callback http://localhost:3000/auth/djai/callback \
+  --home http://localhost:3000/ \
+  --privacy http://localhost:3000/privacy \
+  --terms http://localhost:3000/terms
+```
+
+The CLI registers the exact URLs, writes protected configuration, creates the Express integration module, and adds the secret file to `.gitignore`. The application mounts one router and links its button to `/auth/djai/login`. The adapter owns discovery, PKCE, state, nonce, signature/claim validation, encrypted local sessions, UID/email persistence, and local logout.
+
+Client create, rotation, and revocation are live immediately; provider restarts and database commands are not part of normal onboarding. Operator scripts remain available only for bootstrap and incident recovery.
 
 Follow [the new-app checklist](docs/new-app-checklist.md) for every integration.
 
@@ -74,7 +82,7 @@ Follow [the new-app checklist](docs/new-app-checklist.md) for every integration.
 npm run verify
 ```
 
-The protocol test performs a real authorization-code exchange, PKCE validation, JWKS signature verification, minimal-claim assertion, and code-replay rejection.
+The suites cover the provider protocol, developer authorization/ownership, live client lifecycle, hashed API tokens, CLI safety, reusable Express adapter, encrypted sessions, downstream UID/email persistence, and code replay.
 
 ## Deployment status
 
