@@ -5,8 +5,16 @@ import tseslint from 'typescript-eslint'
 export default tseslint.config(
   { ignores: ['eslint.config.js', '**/dist/**', 'coverage/**', 'node_modules/**'] },
   js.configs.recommended,
-  ...tseslint.configs.recommendedTypeChecked,
   {
+    files: ['**/*.{js,mjs,cjs}'],
+    languageOptions: { globals: globals.node },
+  },
+  ...tseslint.configs.recommendedTypeChecked.map((config) => ({
+    ...config,
+    files: ['**/*.ts'],
+  })),
+  {
+    files: ['**/*.ts'],
     languageOptions: {
       globals: globals.node,
       parserOptions: {

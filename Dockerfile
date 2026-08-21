@@ -18,6 +18,7 @@ COPY --from=build --chown=djai:djai /app/package.json /app/package-lock.json ./
 COPY --from=build --chown=djai:djai /app/node_modules ./node_modules
 COPY --from=build --chown=djai:djai /app/dist ./dist
 COPY --chown=djai:djai migrations ./migrations
+COPY --chown=djai:djai server.js ./server.js
 USER djai
 EXPOSE 3000
-CMD ["node", "dist/src/main.js"]
+CMD ["node", "server.js"]

@@ -3,14 +3,15 @@
   "version": "0.1.0",
   "private": true,
   "type": "module",
+  "main": "server.js",
   "description": "Central OpenID Connect identity provider for Sign in with DJAI School",
   "engines": {
     "node": ">=22.0.0"
   },
   "scripts": {
     "dev": "tsx watch src/main.ts",
-    "build": "tsc -p tsconfig.build.json",
-    "start": "node dist/scripts/migrate.js && node dist/src/main.js",
+    "build": "tsc -p tsconfig.build.json && node scripts/verify-build-output.mjs",
+    "start": "node server.js",
     "typecheck": "tsc --noEmit",
     "lint": "eslint .",
     "test": "vitest run",
