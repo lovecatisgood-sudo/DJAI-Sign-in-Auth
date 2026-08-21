@@ -22,4 +22,4 @@ COPY --from=build --chown=djai:djai /app/node_modules ./node_modules
 COPY --from=build --chown=djai:djai /app/dist ./dist
 USER djai
 EXPOSE 3000
-CMD ["node", "dist/server.js"]
+CMD ["node", "dist/server.cjs"]

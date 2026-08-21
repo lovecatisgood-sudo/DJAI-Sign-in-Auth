@@ -1,7 +1,7 @@
 import { access } from 'node:fs/promises'
 
 const requiredFiles = [
-  'dist/server.js',
+  'dist/server.cjs',
   'dist/scripts/migrate.js',
   'dist/src/main.js',
   'dist/migrations/0001_identity_provider.sql',
@@ -9,4 +9,4 @@ const requiredFiles = [
 ]
 
 await Promise.all(requiredFiles.map((file) => access(file)))
-process.stdout.write(`DJAI Auth build complete. Self-contained entry point: dist/server.js (${requiredFiles.join(', ')})\n`)
+process.stdout.write(`DJAI Auth build complete. Hostinger entry point: dist/server.cjs (${requiredFiles.join(', ')})\n`)
