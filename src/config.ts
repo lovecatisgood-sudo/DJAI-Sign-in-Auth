@@ -12,20 +12,39 @@ const base64Key = z.string().min(1).transform((value, context) => {
 function parseJsonEnvironment(value: string): unknown {
   const raw = value.trim()
   const withoutAssignment = raw.startsWith('OIDC_JWKS=') ? raw.slice('OIDC_JWKS='.length).trim() : raw
-  const candidates = new Set([withoutAssignment])
-
-  if ((withoutAssignment.startsWith("'") && withoutAssignment.endsWith("'"))
-    || (withoutAssignment.startsWith('"') && withoutAssignment.endsWith('"'))) {
-    candidates.add(withoutAssignment.slice(1, -1))
+  const candidates = new Set<string>()
+  const add = (candidate: string): void => {
+    const trimmed = candidate.trim()
+    if (trimmed) candidates.add(trimmed)
   }
-  for (const candidate of [...candidates]) {
-    if (candidate.includes('\\"')) candidates.add(candidate.replaceAll('\\"', '"'))
+  add(withoutAssignment)
+
+  for (let pass = 0; pass < 4; pass += 1) {
+    for (const candidate of [...candidates]) {
+      const first = candidate.at(0)
+      if (first && ['"', "'", '`'].includes(first) && candidate.endsWith(first)) add(candidate.slice(1, -1))
+      if (candidate.includes('\\"')) add(candidate.replaceAll('\\"', '"'))
+      if (candidate.includes('&quot;') || candidate.includes('&#34;')) {
+        add(candidate.replaceAll('&quot;', '"').replaceAll('&#34;', '"'))
+      }
+      if (candidate.includes('%')) {
+        try { add(decodeURIComponent(candidate)) } catch { /* Not URL encoded. */ }
+      }
+      if (candidate.startsWith('{') && candidate.includes("'")) add(candidate.replaceAll("'", '"'))
+      if (!candidate.startsWith('{') && /^[A-Za-z0-9+/_=-]+$/.test(candidate)) {
+        const decoded = Buffer.from(candidate, 'base64').toString('utf8')
+        if (decoded.includes('{')) add(decoded)
+      }
+    }
   }
 
   for (const candidate of candidates) {
     try {
-      const parsed = JSON.parse(candidate) as unknown
-      return typeof parsed === 'string' ? JSON.parse(parsed) as unknown : parsed
+      let parsed = JSON.parse(candidate) as unknown
+      for (let depth = 0; depth < 3 && typeof parsed === 'string'; depth += 1) {
+        parsed = JSON.parse(parsed) as unknown
+      }
+      return parsed
     } catch {
       // Try the next known environment-variable representation.
     }
@@ -72,7 +91,11 @@ export type AppConfig = Omit<z.infer<typeof schema>, 'OIDC_JWKS' | 'DATABASE_CA_
 }
 
 export function loadConfig(environment: NodeJS.ProcessEnv = process.env): AppConfig {
-  const parsed = schema.parse(environment)
+  const base64Jwks = environment.OIDC_JWKS_BASE64?.trim()
+  const normalizedEnvironment = base64Jwks
+    ? { ...environment, OIDC_JWKS: Buffer.from(base64Jwks, 'base64').toString('utf8') }
+    : environment
+  const parsed = schema.parse(normalizedEnvironment)
   const issues: string[] = []
 
   if (parsed.OIDC_COOKIE_KEYS.length < 2 || parsed.OIDC_COOKIE_KEYS.some((key) => key.length < 32)) {

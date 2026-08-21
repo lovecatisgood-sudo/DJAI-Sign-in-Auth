@@ -33,11 +33,28 @@ describe('loadConfig', () => {
     ['double-encoded', (json: string) => JSON.stringify(json)],
     ['escaped', (json: string) => json.replaceAll('"', '\\"')],
     ['assignment-prefixed', (json: string) => `OIDC_JWKS=${json}`],
+    ['single-quoted properties', (json: string) => json.replaceAll('"', "'")],
+    ['URL-encoded', (json: string) => encodeURIComponent(json)],
+    ['HTML-escaped', (json: string) => json.replaceAll('"', '&quot;')],
+    ['base64', (json: string) => Buffer.from(json).toString('base64')],
+    ['backtick-wrapped', (json: string) => `\`${json}\``],
   ])('accepts Hostinger %s JWKS formatting', async (_name, format) => {
     const input = await environment()
     const original = input.OIDC_JWKS
     expect(original).toBeTruthy()
     const config = loadConfig({ ...input, OIDC_JWKS: format(original as string) })
+    expect(config.OIDC_JWKS.keys).toHaveLength(1)
+  })
+
+  it('prefers a dedicated base64 JWKS environment value', async () => {
+    const input = await environment()
+    const original = input.OIDC_JWKS
+    expect(original).toBeTruthy()
+    const config = loadConfig({
+      ...input,
+      OIDC_JWKS: 'Hostinger-corrupted-value',
+      OIDC_JWKS_BASE64: Buffer.from(original as string).toString('base64'),
+    })
     expect(config.OIDC_JWKS.keys).toHaveLength(1)
   })
 
