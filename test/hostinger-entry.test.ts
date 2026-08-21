@@ -11,14 +11,14 @@ afterEach(async () => {
 })
 
 describe('Hostinger CommonJS entry', () => {
-  it('can be required synchronously and starts the ESM graph in order', async () => {
+  it.each(['server.js', 'server.cjs'])('%s can be required synchronously and starts the ESM graph in order', async (entry) => {
     const directory = await mkdtemp(join(tmpdir(), 'djai-hostinger-entry-'))
     temporaryDirectories.push(directory)
     await Promise.all([
       mkdir(join(directory, 'scripts')),
       mkdir(join(directory, 'src')),
       writeFile(join(directory, 'package.json'), JSON.stringify({ type: 'module' })),
-      copyFile(resolve('runtime/server.cjs'), join(directory, 'server.cjs')),
+      copyFile(resolve('runtime', entry), join(directory, entry)),
     ])
     const marker = join(directory, 'started.txt')
     await writeFile(join(directory, 'scripts/migrate.js'), "globalThis.migrationFinished = true\n")
@@ -28,7 +28,7 @@ describe('Hostinger CommonJS entry', () => {
       writeFileSync(process.env.DJAI_TEST_MARKER, 'started')
     `)
 
-    const result = spawnSync(process.execPath, ['-e', "require('./server.cjs')"], {
+    const result = spawnSync(process.execPath, ['-e', `require('./${entry}')`], {
       cwd: directory,
       encoding: 'utf8',
       env: { ...process.env, DJAI_TEST_MARKER: marker },
