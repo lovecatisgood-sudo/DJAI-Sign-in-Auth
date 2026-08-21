@@ -9,6 +9,30 @@ const base64Key = z.string().min(1).transform((value, context) => {
   return decoded
 })
 
+function parseJsonEnvironment(value: string): unknown {
+  const raw = value.trim()
+  const withoutAssignment = raw.startsWith('OIDC_JWKS=') ? raw.slice('OIDC_JWKS='.length).trim() : raw
+  const candidates = new Set([withoutAssignment])
+
+  if ((withoutAssignment.startsWith("'") && withoutAssignment.endsWith("'"))
+    || (withoutAssignment.startsWith('"') && withoutAssignment.endsWith('"'))) {
+    candidates.add(withoutAssignment.slice(1, -1))
+  }
+  for (const candidate of [...candidates]) {
+    if (candidate.includes('\\"')) candidates.add(candidate.replaceAll('\\"', '"'))
+  }
+
+  for (const candidate of candidates) {
+    try {
+      const parsed = JSON.parse(candidate) as unknown
+      return typeof parsed === 'string' ? JSON.parse(parsed) as unknown : parsed
+    } catch {
+      // Try the next known environment-variable representation.
+    }
+  }
+  throw new Error('invalid JSON environment value')
+}
+
 const schema = z.object({
   NODE_ENV: z.enum(['development', 'test', 'production']).default('development'),
   PORT: z.coerce.number().int().min(1).max(65_535).default(3000),
@@ -24,7 +48,7 @@ const schema = z.object({
   CLIENT_SECRET_ENCRYPTION_KEY: base64Key,
   OIDC_JWKS: z.string().transform((value, context) => {
     try {
-      return JSON.parse(value) as { keys?: unknown[] }
+      return parseJsonEnvironment(value) as { keys?: unknown[] }
     } catch {
       context.addIssue({ code: 'custom', message: 'must be valid JSON' })
       return z.NEVER
@@ -55,7 +79,8 @@ export function loadConfig(environment: NodeJS.ProcessEnv = process.env): AppCon
     issues.push('OIDC_COOKIE_KEYS must contain at least two comma-separated keys of 32 or more characters')
   }
 
-  if (!Array.isArray(parsed.OIDC_JWKS.keys) || parsed.OIDC_JWKS.keys.length === 0) {
+  if (!Array.isArray(parsed.OIDC_JWKS.keys)
+    || !parsed.OIDC_JWKS.keys.some((key) => typeof key === 'object' && key !== null && 'd' in key)) {
     issues.push('OIDC_JWKS must contain at least one private signing key')
   }
 

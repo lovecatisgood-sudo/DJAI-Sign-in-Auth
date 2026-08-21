@@ -28,6 +28,28 @@ describe('loadConfig', () => {
     expect(config.OIDC_COOKIE_KEYS).toHaveLength(2)
   })
 
+  it.each([
+    ['single-quoted', (json: string) => `'${json}'`],
+    ['double-encoded', (json: string) => JSON.stringify(json)],
+    ['escaped', (json: string) => json.replaceAll('"', '\\"')],
+    ['assignment-prefixed', (json: string) => `OIDC_JWKS=${json}`],
+  ])('accepts Hostinger %s JWKS formatting', async (_name, format) => {
+    const input = await environment()
+    const original = input.OIDC_JWKS
+    expect(original).toBeTruthy()
+    const config = loadConfig({ ...input, OIDC_JWKS: format(original as string) })
+    expect(config.OIDC_JWKS.keys).toHaveLength(1)
+  })
+
+  it('rejects malformed or public-only JWKS values', async () => {
+    const malformed = await environment({ OIDC_JWKS: 'not-json' })
+    const publicOnly = await environment({
+      OIDC_JWKS: JSON.stringify({ keys: [{ kty: 'RSA', n: 'public', e: 'AQAB' }] }),
+    })
+    expect(() => loadConfig(malformed)).toThrow('valid JSON')
+    expect(() => loadConfig(publicOnly)).toThrow('private signing key')
+  })
+
   it('fails closed on a non-canonical production issuer', async () => {
     const input = await environment({
       NODE_ENV: 'production',
