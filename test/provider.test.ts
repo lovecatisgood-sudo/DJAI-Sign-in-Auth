@@ -25,6 +25,12 @@ const client: ClientMetadata = {
   subject_type: 'public',
   scope: 'openid email',
 }
+const publicClient: ClientMetadata = {
+  ...client,
+  client_id: 'test-public',
+  client_secret: undefined,
+  token_endpoint_auth_method: 'none',
+}
 
 class MemoryAdapter implements Adapter {
   private static readonly stores = new Map<string, Map<string, AdapterPayload>>()
@@ -72,10 +78,49 @@ describe('minimal DJAI OIDC provider', () => {
     expect(discovery.scopes_supported).toEqual(['openid', 'email'])
     expect(discovery.response_types_supported).toEqual(['code'])
     expect(discovery.code_challenge_methods_supported).toEqual(['S256'])
+    expect(discovery.token_endpoint_auth_methods_supported).toEqual(expect.arrayContaining(['client_secret_basic', 'none']))
     expect(discovery.userinfo_endpoint).toBeUndefined()
     expect(discovery.registration_endpoint).toBeUndefined()
     expect(discovery.introspection_endpoint).toBeUndefined()
     expect(discovery.revocation_endpoint).toBeUndefined()
+  })
+
+  it('completes code + PKCE for an explicitly registered public client without a secret', async () => {
+    const fixture = await providerFixture(false, publicClient)
+    const verifier = randomBytes(48).toString('base64url')
+    const challenge = createHash('sha256').update(verifier).digest('base64url')
+    const authorize = new URL('/oauth/authorize', fixture.issuer)
+    authorize.search = new URLSearchParams({
+      response_type: 'code', client_id: publicClient.client_id, redirect_uri: callbackUri,
+      scope: 'openid email', state: 'public-state', nonce: 'public-nonce',
+      code_challenge: challenge, code_challenge_method: 'S256',
+    }).toString()
+
+    let next = authorize.toString()
+    let cookies = ''
+    for (let index = 0; index < 16; index += 1) {
+      const response = await fetch(next, { redirect: 'manual', headers: cookies ? { cookie: cookies } : {} })
+      cookies = mergeCookies(cookies, response.headers.getSetCookie())
+      const location = response.headers.get('location')
+      expect(location).toBeTruthy()
+      next = new URL(location!, next).toString()
+      if (next.startsWith(callbackUri)) break
+    }
+    const code = new URL(next).searchParams.get('code')
+    expect(code).toBeTruthy()
+
+    const tokenResponse = await fetch(`${fixture.issuer}/oauth/token`, {
+      method: 'POST',
+      headers: { 'content-type': 'application/x-www-form-urlencoded' },
+      body: new URLSearchParams({
+        grant_type: 'authorization_code', client_id: publicClient.client_id,
+        code: code!, redirect_uri: callbackUri, code_verifier: verifier,
+      }),
+    })
+    expect(tokenResponse.status).toBe(200)
+    const tokens = await tokenResponse.json() as Record<string, unknown>
+    expect(tokens.id_token).toEqual(expect.any(String))
+    expect(tokens.refresh_token).toBeUndefined()
   })
 
   it('completes code + PKCE and returns the minimal signed identity', async () => {
@@ -188,7 +233,7 @@ describe('minimal DJAI OIDC provider', () => {
   })
 })
 
-async function providerFixture(dynamicClient = false) {
+async function providerFixture(dynamicClient = false, registeredClient: ClientMetadata = client) {
   const server = createServer()
   servers.push(server)
   server.listen(0, '127.0.0.1')
@@ -214,9 +259,9 @@ async function providerFixture(dynamicClient = false) {
   } as unknown as IdentityDirectory
   const grants = new Map<string, string>()
   const confirmations = { grantId: async (_accountId: string, clientId: string) => grants.get(clientId) } as unknown as ConfirmationRepository
-  if (dynamicClient) await new MemoryAdapter('Client').upsert(client.client_id, client as AdapterPayload)
+  if (dynamicClient) await new MemoryAdapter('Client').upsert(registeredClient.client_id, registeredClient as AdapterPayload)
   const provider = createProvider(config, {
-    clients: dynamicClient ? [] : [client], confirmations, identity, logger: createLogger(config), adapter: MemoryAdapter,
+    clients: dynamicClient ? [] : [registeredClient], confirmations, identity, logger: createLogger(config), adapter: MemoryAdapter,
   })
 
   const prompts: string[] = []

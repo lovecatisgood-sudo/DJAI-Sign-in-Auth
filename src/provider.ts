@@ -27,7 +27,7 @@ export function createProvider(config: AppConfig, dependencies: ProviderDependen
     },
     responseTypes: ['code'],
     subjectTypes: ['public'],
-    clientAuthMethods: ['client_secret_basic'],
+    clientAuthMethods: ['client_secret_basic', 'none'],
     clientDefaults: {
       application_type: 'web',
       grant_types: ['authorization_code'],

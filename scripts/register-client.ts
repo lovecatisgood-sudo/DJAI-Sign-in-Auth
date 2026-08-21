@@ -16,6 +16,7 @@ const { values } = parseArgs({
     owner: { type: 'string' },
     security: { type: 'string' },
     actor: { type: 'string' },
+    public: { type: 'boolean', default: false },
   },
   strict: true,
 })
@@ -30,7 +31,7 @@ const config = loadConfig()
 const database = createDatabase(config)
 try {
   const registry = new ClientRegistry(database, new SecretBox(config.CLIENT_SECRET_ENCRYPTION_KEY))
-  const result = await registry.register({
+  const registration = {
     clientId: String(values.id),
     displayName: String(values.name),
     environment: values.environment as 'development' | 'staging' | 'production',
@@ -40,9 +41,16 @@ try {
     termsUrl: String(values.terms),
     ownerEmail: String(values.owner),
     securityContact: String(values.security),
-  }, String(values.actor))
-  process.stdout.write(`client_id=${result.clientId}\nclient_secret=${result.clientSecret}\n`)
-  process.stderr.write('The client secret is shown once. Move it into the application secret manager now.\n')
+  }
+  if (values.public) {
+    const result = await registry.registerPublic(registration, String(values.actor))
+    process.stdout.write(`client_id=${result.clientId}\nclient_auth=none\n`)
+    process.stderr.write('Public client registered. PKCE remains mandatory; there is no client secret.\n')
+  } else {
+    const result = await registry.register(registration, String(values.actor))
+    process.stdout.write(`client_id=${result.clientId}\nclient_secret=${result.clientSecret}\n`)
+    process.stderr.write('The client secret is shown once. Move it into the application secret manager now.\n')
+  }
 } finally {
   await database.end()
 }

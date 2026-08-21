@@ -108,6 +108,20 @@ export class ClientRegistry {
   }
 
   async register(input: ClientRegistration, actor: string, createdBySubject?: string): Promise<{ clientId: string; clientSecret: string }> {
+    return this.registerWithMethod(input, actor, 'client_secret_basic', createdBySubject)
+  }
+
+  async registerPublic(input: ClientRegistration, actor: string, createdBySubject?: string): Promise<{ clientId: string }> {
+    const created = await this.registerWithMethod(input, actor, 'none', createdBySubject)
+    return { clientId: created.clientId }
+  }
+
+  private async registerWithMethod(
+    input: ClientRegistration,
+    actor: string,
+    tokenEndpointAuthMethod: 'client_secret_basic' | 'none',
+    createdBySubject?: string,
+  ): Promise<{ clientId: string; clientSecret: string }> {
     const registration = registrationSchema.parse(input)
     validateClientUrls(registration)
     const clientSecret = randomBytes(32).toString('base64url')
@@ -122,7 +136,7 @@ export class ClientRegistry {
       application_type: 'web',
       grant_types: ['authorization_code'],
       response_types: ['code'],
-      token_endpoint_auth_method: 'client_secret_basic',
+      token_endpoint_auth_method: tokenEndpointAuthMethod,
       id_token_signed_response_alg: 'RS256',
       subject_type: 'public',
       scope: 'openid email',
@@ -150,7 +164,11 @@ export class ClientRegistry {
       await connection.query(
         `insert into oidc_client_audit (client_id, action, actor, details)
          values ($1, 'registered', $2, $3::jsonb)`,
-        [registration.clientId, actor, JSON.stringify({ environment: registration.environment, redirectUris: registration.redirectUris })],
+        [registration.clientId, actor, JSON.stringify({
+          environment: registration.environment,
+          redirectUris: registration.redirectUris,
+          tokenEndpointAuthMethod,
+        })],
       )
       await connection.query('commit')
     } catch (error) {
