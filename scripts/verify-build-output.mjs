@@ -7,6 +7,7 @@ const requiredFiles = [
   'dist/src/main.js',
   'dist/migrations/0001_identity_provider.sql',
   'dist/certs/supabase-root-2021-ca.crt',
+  'dist/secrets/oidc-jwks.enc.json',
 ]
 
 await Promise.all(requiredFiles.map((file) => access(file)))

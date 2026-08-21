@@ -14,6 +14,11 @@ Supabase Root 2021 CA in `certs/`. `DATABASE_CA_CERT` can override the bundled
 trust anchor during rotation; multiline PEM and a single line containing literal
 `\n` sequences are both accepted. Never commit private keys or credentials.
 
+The repository contains an AES-256-GCM encrypted JWKS fallback for hosting
+platforms that cannot preserve JSON environment values. Its encryption key is
+derived with HKDF from `CLIENT_SECRET_ENCRYPTION_KEY`; plaintext signing keys
+remain excluded. Regenerate the encrypted bundle whenever either key rotates.
+
 ## Developer access
 
 - Bootstrap exact first-party developer emails through `DEVELOPER_EMAIL_ALLOWLIST`.

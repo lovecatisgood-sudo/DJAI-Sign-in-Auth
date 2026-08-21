@@ -10,6 +10,7 @@ COPY scripts ./scripts
 COPY certs ./certs
 COPY migrations ./migrations
 COPY runtime ./runtime
+COPY secrets ./secrets
 RUN npm run build
 RUN npm prune --omit=dev --ignore-scripts
 

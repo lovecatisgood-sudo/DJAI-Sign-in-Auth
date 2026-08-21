@@ -1,3 +1,5 @@
+import { createDecipheriv, hkdfSync } from 'node:crypto'
+import { readFileSync } from 'node:fs'
 import { z } from 'zod'
 
 const base64Key = z.string().min(1).transform((value, context) => {
@@ -52,6 +54,59 @@ function parseJsonEnvironment(value: string): unknown {
   throw new Error('invalid JSON environment value')
 }
 
+function containsPrivateSigningKey(value: unknown): boolean {
+  if (typeof value !== 'object' || value === null || !('keys' in value)) return false
+  const keys = (value as { keys?: unknown }).keys
+  return Array.isArray(keys) && keys.some((key) => typeof key === 'object' && key !== null && 'd' in key)
+}
+
+function decryptBundledJwks(encryptionKey: string): string {
+  const masterKey = Buffer.from(encryptionKey, 'base64')
+  if (masterKey.length !== 32) throw new Error('invalid bundle encryption key')
+  const derivedKey = Buffer.from(hkdfSync(
+    'sha256',
+    masterKey,
+    Buffer.from('djai-sign-in'),
+    Buffer.from('oidc-jwks-bundle-v1'),
+    32,
+  ))
+  const bundle = JSON.parse(readFileSync(
+    new URL('../secrets/oidc-jwks.enc.json', import.meta.url),
+    'utf8',
+  )) as { ciphertext: string; iv: string; tag: string; version: number }
+  if (bundle.version !== 1) throw new Error('unsupported JWKS bundle version')
+  const decipher = createDecipheriv('aes-256-gcm', derivedKey, Buffer.from(bundle.iv, 'base64'))
+  decipher.setAuthTag(Buffer.from(bundle.tag, 'base64'))
+  return Buffer.concat([
+    decipher.update(Buffer.from(bundle.ciphertext, 'base64')),
+    decipher.final(),
+  ]).toString('utf8')
+}
+
+function normalizedJwks(environment: NodeJS.ProcessEnv): string | undefined {
+  const candidates = [
+    environment.OIDC_JWKS_BASE64
+      ? Buffer.from(environment.OIDC_JWKS_BASE64.trim(), 'base64').toString('utf8')
+      : undefined,
+    environment.OIDC_JWKS,
+  ]
+  for (const candidate of candidates) {
+    if (!candidate) continue
+    try {
+      const parsed = parseJsonEnvironment(candidate)
+      if (containsPrivateSigningKey(parsed)) return JSON.stringify(parsed)
+    } catch {
+      // Fall through to the encrypted bundle.
+    }
+  }
+  if (!environment.CLIENT_SECRET_ENCRYPTION_KEY) return environment.OIDC_JWKS
+  try {
+    return decryptBundledJwks(environment.CLIENT_SECRET_ENCRYPTION_KEY)
+  } catch {
+    return environment.OIDC_JWKS
+  }
+}
+
 const schema = z.object({
   NODE_ENV: z.enum(['development', 'test', 'production']).default('development'),
   PORT: z.coerce.number().int().min(1).max(65_535).default(3000),
@@ -91,10 +146,7 @@ export type AppConfig = Omit<z.infer<typeof schema>, 'OIDC_JWKS' | 'DATABASE_CA_
 }
 
 export function loadConfig(environment: NodeJS.ProcessEnv = process.env): AppConfig {
-  const base64Jwks = environment.OIDC_JWKS_BASE64?.trim()
-  const normalizedEnvironment = base64Jwks
-    ? { ...environment, OIDC_JWKS: Buffer.from(base64Jwks, 'base64').toString('utf8') }
-    : environment
+  const normalizedEnvironment = { ...environment, OIDC_JWKS: normalizedJwks(environment) }
   const parsed = schema.parse(normalizedEnvironment)
   const issues: string[] = []
 
