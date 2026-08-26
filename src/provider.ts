@@ -112,9 +112,15 @@ export function createProvider(config: AppConfig, dependencies: ProviderDependen
       return provider.Grant.find(grantId)
     },
     renderError(context, out) {
+      const description = typeof out.error_description === 'string' ? out.error_description : undefined
+      dependencies.logger.warn({
+        error: out.error,
+        errorDescription: description,
+        path: context.path,
+      }, 'OIDC request rejected')
       context.type = 'html'
       context.set('Cache-Control', 'no-store')
-      context.body = `<!doctype html><html lang="en"><meta charset="utf-8"><meta name="viewport" content="width=device-width"><title>DJAI sign-in error</title><body><main><h1>Unable to continue</h1><p>${escapeHtml(out.error)}</p><p>Please return to the application and try again.</p></main></body></html>`
+      context.body = `<!doctype html><html lang="en"><meta charset="utf-8"><meta name="viewport" content="width=device-width"><title>DJAI sign-in error</title><body><main><h1>Unable to continue</h1><p>${escapeHtml(out.error)}</p>${description ? `<p>${escapeHtml(description)}</p>` : ''}<p>Please return to the application and try again.</p></main></body></html>`
     },
   }
 
