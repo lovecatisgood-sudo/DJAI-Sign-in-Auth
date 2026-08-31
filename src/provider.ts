@@ -119,6 +119,7 @@ export function createProvider(config: AppConfig, dependencies: ProviderDependen
         error: out.error,
         errorDescription: description,
         correlationId: reference,
+        path: context.path,
       }, 'OIDC request rejected')
       context.type = 'html'
       context.set('Cache-Control', 'no-store')
