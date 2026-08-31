@@ -1,3 +1,4 @@
+import { randomUUID } from 'node:crypto'
 import Provider, { type ClientMetadata, type Configuration } from 'oidc-provider'
 import type { AppConfig } from './config.js'
 import type { ConfirmationRepository } from './confirmations.js'
@@ -36,11 +37,11 @@ export function createProvider(config: AppConfig, dependencies: ProviderDependen
       id_token_signed_response_alg: 'RS256',
       subject_type: 'public',
     },
+    extraParams: ['screen_hint'],
     enabledJWA: {
       idTokenSigningAlgValues: ['RS256'],
     },
     pkce: { required: () => true },
-    issueRefreshToken: () => false,
     conformIdTokenClaims: true,
     allowOmittingSingleRegisteredRedirectUri: false,
     acceptQueryParamAccessTokens: false,
@@ -112,9 +113,17 @@ export function createProvider(config: AppConfig, dependencies: ProviderDependen
       return provider.Grant.find(grantId)
     },
     renderError(context, out) {
+      const reference = randomUUID()
+      const description = typeof out.error_description === 'string' ? out.error_description : undefined
+      dependencies.logger.warn({
+        error: out.error,
+        errorDescription: description,
+        correlationId: reference,
+      }, 'OIDC request rejected')
       context.type = 'html'
       context.set('Cache-Control', 'no-store')
-      context.body = `<!doctype html><html lang="en"><meta charset="utf-8"><meta name="viewport" content="width=device-width"><title>DJAI sign-in error</title><body><main><h1>Unable to continue</h1><p>${escapeHtml(out.error)}</p><p>Please return to the application and try again.</p></main></body></html>`
+      context.set('X-DJAI-Error-Reference', reference)
+      context.body = `<!doctype html><html lang="en"><meta charset="utf-8"><meta name="viewport" content="width=device-width"><title>DJAI sign-in error</title><body><main><h1>Unable to continue</h1><p>Return to the application and try again. If the problem continues, provide support with reference ${escapeHtml(reference)}.</p></main></body></html>`
     },
   }
 

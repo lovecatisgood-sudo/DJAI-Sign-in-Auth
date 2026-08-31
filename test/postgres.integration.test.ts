@@ -35,6 +35,19 @@ suite('PostgreSQL persistence integration', () => {
     expect((await adapter.find('code-id'))?.consumed).toEqual(expect.any(Number))
   })
 
+  it('revokes grant artifacts only from the requested provider model', async () => {
+    const Adapter = postgresAdapter(database!)
+    const accessToken = new Adapter('AccessToken')
+    const interaction = new Adapter('Interaction')
+    await accessToken.upsert('access-id', { jti: 'access-id', kind: 'AccessToken', grantId: 'shared-grant' }, 90)
+    await interaction.upsert('interaction-id', { jti: 'interaction-id', kind: 'Interaction', grantId: 'shared-grant' }, 90)
+
+    await accessToken.revokeByGrantId('shared-grant')
+
+    expect(await accessToken.find('access-id')).toBeUndefined()
+    expect(await interaction.find('interaction-id')).toMatchObject({ grantId: 'shared-grant' })
+  })
+
   it('encrypts client secrets at rest and loads an exact confidential client', async () => {
     const registry = new ClientRegistry(database!, new SecretBox(Buffer.alloc(32, 7)))
     const created = await registry.register({

@@ -10,6 +10,16 @@ describe('identity views', () => {
     expect(html).toContain('&lt;script&gt;')
   })
 
+  it('prefills a validated account hint without making it authoritative', () => {
+    const html = renderLogin({
+      uid: 'abc', csrf: 'csrf', clientName: 'DJAI Studio', locale: 'en', allowSignup: true,
+      emailHint: 'admin@example.com',
+    })
+
+    expect(html).toContain('value="admin@example.com"')
+    expect(html).toContain('autocomplete="email"')
+  })
+
   it('shows only the approved identity release', () => {
     const html = renderConsent({
       uid: 'abc', csrf: 'csrf', clientName: 'DJAI Studio', email: 'member@example.com', locale: 'en',

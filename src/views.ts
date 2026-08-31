@@ -6,6 +6,7 @@ interface LoginView {
   clientName: string
   locale: Locale
   allowSignup: boolean
+  emailHint?: string
   error?: string
 }
 
@@ -44,7 +45,7 @@ export function renderLogin(input: LoginView): string {
     <form method="post" action="/interaction/${encodeURIComponent(input.uid)}/login">
       <input type="hidden" name="csrf" value="${escapeHtml(input.csrf)}">
       <input type="hidden" name="lang" value="${input.locale}">
-      <label>${copy.email}<input required autocomplete="email" inputmode="email" name="email" type="email" maxlength="320"></label>
+      <label>${copy.email}<input required autocomplete="email" inputmode="email" name="email" type="email" maxlength="320"${input.emailHint ? ` value="${escapeHtml(input.emailHint)}"` : ''}></label>
       <label>${copy.password}<input required autocomplete="current-password" name="password" type="password" minlength="8" maxlength="200"></label>
       <button class="primary" type="submit">${copy.submit}</button>
     </form>

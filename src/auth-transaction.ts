@@ -5,6 +5,7 @@ import type { SecretBox } from './secret-box.js'
 export interface AuthTransaction {
   interactionUid: string
   kind: 'google' | 'signup'
+  locale?: 'en' | 'th'
   storage: Record<string, string>
   createdAt: number
 }
@@ -33,6 +34,7 @@ export class AuthTransactionCookie {
       if (
         typeof parsed.interactionUid !== 'string'
         || (parsed.kind !== 'google' && parsed.kind !== 'signup')
+        || (parsed.locale !== undefined && parsed.locale !== 'en' && parsed.locale !== 'th')
         || !parsed.storage
         || typeof parsed.storage !== 'object'
         || typeof parsed.createdAt !== 'number'

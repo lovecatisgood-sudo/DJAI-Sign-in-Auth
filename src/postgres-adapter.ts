@@ -64,8 +64,9 @@ export function postgresAdapter(database: Database, clients?: Pick<ClientRegistr
     async revokeByGrantId(grantId: string): Promise<void> {
       await database.query(
         `delete from oidc_provider_payloads
-         where payload ->> 'grantId' = $1`,
-        [grantId],
+         where model = $1
+           and payload ->> 'grantId' = $2`,
+        [this.model, grantId],
       )
     }
 

@@ -43,17 +43,27 @@ export function interactionRouter(dependencies: InteractionDependencies): Router
     ensureUid(details.uid, request.params.uid)
     const client = await dependencies.provider.Client.find(String(details.params.client_id))
     if (!client) return sendMessage(response, 400, 'Unable to continue', 'The requesting application is not registered.')
-    const locale = localeFrom(request.query.lang)
+    const locale = interactionLocale(request.query.lang, details.params.ui_locales)
     const csrf = dependencies.csrf.issue(response, details.uid)
     response.setHeader('Cache-Control', 'no-store')
 
     if (details.prompt.name === 'login') {
+      if (dependencies.config.ENABLE_SIGNUP && details.params.screen_hint === 'signup') {
+        return response.type('html').send(renderSignup({
+          uid: details.uid,
+          csrf,
+          clientName: client.clientName ?? client.clientId,
+          locale,
+        }))
+      }
+      const hintedEmail = emailHint(details.params.login_hint)
       return response.type('html').send(renderLogin({
         uid: details.uid,
         csrf,
         clientName: client.clientName ?? client.clientId,
         locale,
         allowSignup: dependencies.config.ENABLE_SIGNUP,
+        ...(hintedEmail ? { emailHint: hintedEmail } : {}),
       }))
     }
 
@@ -87,14 +97,16 @@ export function interactionRouter(dependencies: InteractionDependencies): Router
     const identity = user ? await dependencies.identity.fromAuthenticatedUser(user) : undefined
     if (!identity) {
       await dependencies.securityEvents.record({ eventType: 'login_failed', clientId: String(details.params.client_id), request })
-      const locale = localeFrom(bodyField(request, 'lang'))
+      const locale = interactionLocale(bodyField(request, 'lang'), details.params.ui_locales)
       const csrf = dependencies.csrf.issue(response, details.uid)
+      const hintedEmail = emailHint(email)
       return response.status(401).type('html').send(renderLogin({
         uid: details.uid,
         csrf,
         clientName: String(details.params.client_id),
         locale,
         allowSignup: dependencies.config.ENABLE_SIGNUP,
+        ...(hintedEmail ? { emailHint: hintedEmail } : {}),
         error: genericLoginError(locale),
       }))
     }
@@ -114,6 +126,7 @@ export function interactionRouter(dependencies: InteractionDependencies): Router
     dependencies.authTransaction.write(response, transactionId, {
       interactionUid: details.uid,
       kind: 'google',
+      locale: interactionLocale(bodyField(request, 'lang'), details.params.ui_locales),
       storage: storage.values,
       createdAt: Date.now(),
     })
@@ -126,7 +139,7 @@ export function interactionRouter(dependencies: InteractionDependencies): Router
     ensureUid(details.uid, request.params.uid)
     const client = await dependencies.provider.Client.find(String(details.params.client_id))
     if (!client) return sendMessage(response, 400, 'Unable to continue', 'The requesting application is not registered.')
-    const locale = localeFrom(request.query.lang)
+    const locale = interactionLocale(request.query.lang, details.params.ui_locales)
     response.setHeader('Cache-Control', 'no-store')
     return response.type('html').send(renderSignup({
       uid: details.uid,
@@ -158,6 +171,7 @@ export function interactionRouter(dependencies: InteractionDependencies): Router
       dependencies.authTransaction.write(response, transactionId, {
         interactionUid: details.uid,
         kind: 'signup',
+        locale,
         storage: storage.values,
         createdAt: Date.now(),
       })
@@ -188,9 +202,17 @@ export function interactionRouter(dependencies: InteractionDependencies): Router
     const user = await dependencies.auth.exchangeCallback(new MutableAuthStorage(transaction.storage), code)
     const identity = user ? await dependencies.identity.fromAuthenticatedUser(user) : undefined
     dependencies.authTransaction.clear(response, transactionId)
-    if (!identity) return sendMessage(response, 403, 'Unable to continue', 'The DJAI School account must be verified and active.')
+    if (!identity) return sendMessage(
+      response,
+      403,
+      transaction.locale === 'th' ? 'ไม่สามารถดำเนินการต่อได้' : 'Unable to continue',
+      transaction.locale === 'th'
+        ? 'บัญชี DJAI School ต้องยืนยันอีเมลและอยู่ในสถานะใช้งาน'
+        : 'The DJAI School account must be verified and active.',
+      transaction.locale ?? 'en',
+    )
     dependencies.loginResult.write(response, { interactionUid: transaction.interactionUid, subject: identity.subject })
-    return response.redirect(303, `/interaction/${encodeURIComponent(transaction.interactionUid)}/resume`)
+    return response.redirect(303, `/interaction/${encodeURIComponent(transaction.interactionUid)}/resume?lang=${transaction.locale ?? 'en'}`)
   }))
 
   router.get('/interaction/:uid/resume', asyncHandler(async (request, response) => {
@@ -230,6 +252,40 @@ export function interactionRouter(dependencies: InteractionDependencies): Router
       error_description: 'The user cancelled DJAI School sign-in.',
     }, { mergeWithLastSubmission: false })
   }))
+
+  router.use((error: unknown, request: Request, response: Response, next: (error?: unknown) => void) => {
+    if (response.headersSent) return next(error)
+
+    const reference = randomUUID()
+    const expired = isInvalidInteraction(error)
+    const logDetails = { err: error, correlationId: reference, method: request.method }
+    if (expired) {
+      dependencies.logger.warn(logDetails, 'OIDC interaction expired or invalid')
+    } else {
+      dependencies.logger.error(logDetails, 'OIDC interaction failed')
+    }
+
+    const locale = localeFrom(request.query.lang ?? bodyField(request, 'lang'))
+    response.setHeader('Cache-Control', 'no-store')
+    response.setHeader('X-DJAI-Error-Reference', reference)
+    if (expired) {
+      return response.status(400).type('html').send(renderMessage(
+        locale === 'th' ? 'การเข้าสู่ระบบหมดอายุ' : 'Sign-in expired',
+        locale === 'th'
+          ? 'กลับไปที่แอปและเริ่มเข้าสู่ระบบอีกครั้ง'
+          : 'Return to the application and start sign-in again.',
+        locale,
+      ))
+    }
+
+    return response.status(500).type('html').send(renderMessage(
+      locale === 'th' ? 'ไม่สามารถดำเนินการต่อได้' : 'Unable to continue',
+      locale === 'th'
+        ? `กลับไปที่แอปและลองอีกครั้ง หากปัญหายังคงอยู่ โปรดแจ้งรหัสอ้างอิง ${reference}`
+        : `Return to the application and try again. If the problem continues, provide support with reference ${reference}.`,
+      locale,
+    ))
+  })
 
   return router
 }
@@ -276,9 +332,34 @@ function genericLoginError(locale: Locale): string {
   return locale === 'th' ? 'ไม่สามารถเข้าสู่ระบบได้ โปรดตรวจสอบข้อมูลหรือสถานะบัญชีของคุณ' : 'Unable to sign in. Check your details or account status.'
 }
 
-function sendMessage(response: Response, status: number, title: string, message: string): Response {
+function interactionLocale(explicit: unknown, uiLocales: unknown): Locale {
+  if (explicit === 'th' || explicit === 'en') return explicit
+  if (typeof uiLocales === 'string' && uiLocales.split(/\s+/).includes('th')) return 'th'
+  return 'en'
+}
+
+function emailHint(value: unknown): string | undefined {
+  if (typeof value !== 'string' || value.length > 320) return undefined
+  const normalized = value.trim().toLowerCase()
+  return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(normalized) ? normalized : undefined
+}
+
+function isInvalidInteraction(error: unknown): boolean {
+  if (!error || typeof error !== 'object') return false
+  const candidate = error as { error?: unknown; status?: unknown; statusCode?: unknown }
+  const status = candidate.statusCode ?? candidate.status
+  return candidate.error === 'invalid_request' && status === 400
+}
+
+function sendMessage(
+  response: Response,
+  status: number,
+  title: string,
+  message: string,
+  locale: Locale = 'en',
+): Response {
   response.setHeader('Cache-Control', 'no-store')
-  return response.status(status).type('html').send(renderMessage(title, message))
+  return response.status(status).type('html').send(renderMessage(title, message, locale))
 }
 
 function asyncHandler(handler: (request: Request, response: Response) => Promise<unknown>) {
